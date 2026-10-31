@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NeuroTrace AI — Intelligent Algorithm Visualization and Analysis System</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="bgc"></canvas>
+<header>
+  <div style="display:flex;gap:14px;align-items:center"><div class="logo"></div><div><h1>NeuroTrace <b>AI</b></h1><p class="sub">An Intelligent Algorithm Visualization and Analysis System</p></div></div>
+  <span class="be" id="be">C++ BACKEND · CHECKING</span><button class="ib" id="theme">◐ THEME</button>
+</header>
+
+<div class="wrap">
+  <div class="col">
+    <section class="pn">
+      <h2>User Input <span>alphanumeric · max 10 words</span></h2>
+      <textarea id="in" placeholder="Type e.g. Red color" spellcheck="false"></textarea>
+      <div class="meters">
+        <div class="m" id="mc"><b id="nc">0</b>characters</div>
+        <div class="m" id="mw"><b id="nw">0 / 10</b>words<div class="bar"><i id="wb"></i></div></div>
+      </div>
+      <div class="row"><button class="btn p" id="go">▶ ANALYZE</button><button class="btn" id="clr">CLEAR</button></div>
+      <div class="row" id="samples"></div>
+      <div class="sub" id="warn" style="color:var(--rd);min-height:1.2em;margin-top:8px"></div>
+    </section>
+    <section class="pn"><h2>NLP Tokenization</h2><div id="toks" class="sub">Waiting for input…</div></section>
+    <section class="pn"><h2>ASCII → Binary <span>per word</span></h2><div id="bin" class="bin sub">Waiting for input…</div></section>
+  </div>
+
+  <div class="col">
+    <section class="pn">
+      <h2>PIPELINE</h2>
+      <div class="stages" id="stages"></div>
+    </section>
+    <section class="pn">
+      <h2>AI Search Visualizer <span>slide to switch views</span></h2>
+      <div class="tabs"><button class="ar" id="pv" aria-label="Previous view">‹</button><button class="tb on">Knowledge Graph</button><button class="tb">Inheritance Tree</button><button class="tb">Alignment &amp; Matrix Grid</button><button class="ar" id="nx" aria-label="Next view">›</button></div>
+      <div class="sl"><div class="tr" id="tr"><div class="sd"><div class="cv"><canvas id="cv"></canvas><div class="stat" id="stat">IDLE</div>
+        <div class="lg"><span><i style="background:var(--ye)"></i>ACTIVE</span><span><i style="background:var(--pu)"></i>VISITED</span><span><i style="background:var(--cy)"></i>PATH</span></div></div></div><div class="sd"><div class="cv sc2" id="tree"></div></div><div class="sd"><div class="cv sc2" id="grid"></div></div></div></div>
+      <div class="mt"><div><b id="mT">0</b>Tokens</div><div><b id="mB">0</b>Bits</div><div><b id="mV">0</b>Nodes explored</div><div><b id="mC">0</b>Path cost</div></div>
+      <div class="row"><label class="sub">Speed <input type="range" id="spd" min="20" max="400" value="140"></label></div>
+    </section>
+    <section class="pn"><h2>DATA STRUCTURE CHAIN</h2>
+      <div class="ds"><div><div class="sub">Array (tokens)</div><div id="arr"></div></div><div><div class="sub">Hash map (word → hash → graph node)</div><div id="hm"></div></div></div></section>
+    <section class="pn"><h2>AI Output</h2><div class="out" id="out"><span class="sub">Press ANALYZE to trace the meaning.</span></div></section>
+  </div>
+</div>
+<p class="ft">Demo knowledge base is small and built into this page. The search runs over a fixed 26-node graph; each word is hashed (djb2) to a node, then Dijkstra finds the lowest-cost route from START (A). Facts are general reference values.</p>
+
+<script src="app.js"></script>
+</body>
+</html>

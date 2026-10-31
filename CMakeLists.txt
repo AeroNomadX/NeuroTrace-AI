@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.14)
+project(NeuroTraceAI CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+include_directories(backend/src backend/third_party)
+
+# Terminal tool: ./neurotrace_cli "Red color"
+add_executable(neurotrace_cli backend/src/cli.cpp)
+
+# Web server (needs backend/third_party/httplib.h)
+if(EXISTS ${CMAKE_SOURCE_DIR}/backend/third_party/httplib.h)
+  find_package(Threads REQUIRED)
+  add_executable(neurotrace_server backend/src/server.cpp)
+  target_link_libraries(neurotrace_server Threads::Threads)
+  if(WIN32)
+    target_link_libraries(neurotrace_server ws2_32)
+  endif()
+else()
+  message(WARNING "httplib.h not found in backend/third_party - web server target skipped")
+endif()

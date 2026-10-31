@@ -1,0 +1,161 @@
+// NeuroTrace AI - front-end logic: tokenizer UI, graph/tree/matrix visualizers, backend bridge
+const $=s=>document.querySelector(s),MAXW=10;
+const KB={color:["is how the eye reads wavelengths of light between about 380 and 750 nm","is built from red, green and blue cone cells in the human retina"],
+red:["has the longest visible wavelength, about 620–750 nm","is used in hospitals and by the Red Cross for emergency and medical signage","signals danger and stop, as in traffic lights"],
+blue:["has a short wavelength, about 450–495 nm, which is why Rayleigh scattering makes the sky look blue","is common in hospital scrubs and tech branding because it feels calm and trustworthy"],
+green:["sits mid-spectrum at about 495–570 nm, where human eyes are most sensitive","is used for exit signs and operating-room scrubs because it reduces eye strain"],
+yellow:["has a wavelength of about 570–590 nm and is highly visible","is used for caution signs and school buses"],
+water:["covers about 71% of Earth’s surface","has the formula H2O and boils at 100 °C at sea level"],
+sun:["is a G-type star about 4.6 billion years old","sends light that takes about 8 minutes to reach Earth"],
+moon:["orbits Earth about every 27.3 days","drives the ocean tides through gravity"],
+fire:["needs fuel, heat and oxygen, known as the fire triangle","is a chemical reaction called combustion"],
+heart:["beats about 60–100 times per minute in a resting adult","pumps blood through roughly 100,000 km of vessels"],
+light:["travels about 299,792 km per second in vacuum","behaves as both a wave and a particle"],
+brain:["contains about 86 billion neurons","uses roughly 20% of the body’s energy"],
+computer:["stores everything in binary, as 0s and 1s","processes data using arrays, hash maps, trees and graphs"],
+tree:["absorbs CO2 and releases oxygen through photosynthesis","is also a hierarchical data structure of nodes"],
+data:["is stored as binary digits inside memory","is organised with structures such as arrays and graphs"]};
+const SYN={colour:"color",colours:"color",colors:"color",sunlight:"sun",ai:"computer",code:"computer"};
+const SAMPLES=["Red color","Blue sky water","Sun moon light","Brain computer data","Green tree 2026"];
+const STG=["NLP input","Tokenize","ASCII→Binary","Array","Hash map","Graph search","Output"];
+$("#stages").innerHTML=STG.map((s,i)=>`<div class="st" id="s${i}">${s}</div>`).join("");
+$("#samples").innerHTML=SAMPLES.map(s=>`<button class="chip">${s}</button>`).join("");
+$("#samples").onclick=e=>{if(e.target.className=="chip"){$("#in").value=e.target.textContent;upd()}};
+
+// ---------- input processing ----------
+function words(){return $("#in").value.replace(/[^A-Za-z0-9\s]/g,"").trim().split(/\s+/).filter(Boolean)}
+function hash(w){let h=5381;for(const c of w.toLowerCase())h=((h<<5)+h+c.charCodeAt(0))>>>0;return h}
+const node=w=>1+hash(w)%25,L=i=>String.fromCharCode(65+i);
+let toks=[];
+function upd(){
+  const raw=$("#in").value,clean=raw.replace(/[^A-Za-z0-9\s]/g,"");
+  const all=clean.trim().split(/\s+/).filter(Boolean);toks=all.slice(0,MAXW);
+  $("#nc").textContent=raw.length;$("#mT").textContent=toks.length;$("#mB").textContent=toks.join("").length*8;$("#nw").textContent=all.length+" / "+MAXW;
+  $("#mw").classList.toggle("bad",all.length>MAXW);$("#wb").style.width=Math.min(100,all.length*10)+"%";
+  $("#warn").textContent=raw!==clean?"Only letters and numbers are used; symbols are ignored.":all.length>MAXW?"Limit is 10 words — extra words are dropped.":"";
+  rT();rG();$("#toks").innerHTML=toks.length?toks.map((t,i)=>`<span class="tok">[${i}] ${t}</span>`).join(""):"Waiting for input…";
+  $("#bin").innerHTML=toks.length?toks.map(w=>`<div class="bw"><b>${w}</b>${[...w].map(c=>`<div><span class="c">${c}</span> = ${c.charCodeAt(0)} → <span class="z">${c.charCodeAt(0).toString(2).padStart(8,"0")}</span></div>`).join("")}</div>`).join(""):"Waiting for input…";
+  $("#arr").innerHTML=toks.map((t,i)=>`<span class="cell"><small>${i}</small>${t}</span>`).join("");
+  $("#hm").innerHTML=toks.map(t=>`<span class="cell h"><small>${hash(t)%1000}</small>${t}→${L(node(t))}</span>`).join("");
+}
+$("#in").addEventListener("input",upd);
+$("#clr").onclick=()=>{$("#in").value="";runId++;upd();resetG();$("#out").innerHTML='<span class="sub">Press ANALYZE to trace the meaning.</span>';stage(-1)};
+$("#theme").onclick=()=>{const r=document.documentElement;r.dataset.theme=getComputedStyle(r).colorScheme=="dark"?"light":"dark"};
+
+// ---------- graph ----------
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const N=26,P=[],E=[],adj=Array.from({length:N},()=>[]);
+for(let i=0;i<N;i++)P.push([.06+(i%6)*.176+(rnd()-.5)*.09,.1+Math.floor(i/6)*.2+(rnd()-.5)*.08]);
+P[0]=[.07,.12];
+const dd=(a,b)=>Math.hypot(P[a][0]-P[b][0],(P[a][1]-P[b][1])*.7);
+function addE(a,b){if(adj[a].some(x=>x.v==b))return;const w=1+Math.floor(rnd()*9);E.push([a,b,w]);adj[a].push({v:b,w});adj[b].push({v:a,w})}
+for(let i=1;i<N;i++){let b=0,bd=9;for(let j=0;j<i;j++)if(dd(i,j)<bd){bd=dd(i,j);b=j}addE(i,b)}
+for(let i=0;i<N;i++){[...Array(N).keys()].filter(j=>j!=i).sort((a,b)=>dd(i,a)-dd(i,b)).slice(0,2).forEach(j=>addE(i,j))}
+let st=Array(N).fill(0),dist=Array(N).fill(null),cur=[],old=new Set(),target=-1;
+const resetG=()=>{st=Array(N).fill(0);dist=Array(N).fill(null);cur=[];old=new Set();target=-1;$("#stat").textContent="IDLE"};
+const sleep=()=>new Promise(r=>setTimeout(r,+$("#spd").value));
+let runId=0;
+async function dijkstra(t,id){
+  st=Array(N).fill(0);dist=Array(N).fill(null);cur=[];target=t;const d=Array(N).fill(1e9),pv=Array(N).fill(-1),done=Array(N).fill(false);d[0]=0;dist[0]=0;
+  for(;;){
+    let u=-1;for(let i=0;i<N;i++)if(!done[i]&&d[i]<1e9&&(u<0||d[i]<d[u]))u=i;
+    if(u<0)break;st[u]=1;$("#stat").textContent="SEARCHING → "+L(t);await sleep();if(id!=runId)return false;
+    done[u]=true;st[u]=2;$("#mV").textContent=done.filter(Boolean).length;if(u==t)break;
+    for(const{v,w}of adj[u])if(!done[v]&&d[u]+w<d[v]){d[v]=d[u]+w;pv[v]=u;dist[v]=d[v]}
+  }
+  const path=[];for(let x=t;x!=-1;x=pv[x])path.unshift(x);
+  for(let i=0;i<path.length;i++){path.slice(0,i+1).forEach(x=>st[x]=3);cur=path.slice(0,i+1);await sleep();if(id!=runId)return false}
+  path.forEach(x=>old.add(x));$("#mC").textContent=d[t];$("#stat").textContent="OPTIMAL_ROUTE_FOUND";return d[t];
+}
+
+// ---------- canvas ----------
+const cv=$("#cv"),cx=cv.getContext("2d");let W=0,H=0;
+function size(){const r=cv.getBoundingClientRect(),q=devicePixelRatio||1;W=r.width;H=r.height;cv.width=W*q;cv.height=H*q;cx.setTransform(q,0,0,q,0,0)}
+new ResizeObserver(size).observe(cv);
+const X=i=>P[i][0]*W,Y=i=>P[i][1]*H*1.0+8,V=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function pill(t,x,y,bg,fg){cx.font="10px monospace";const w=cx.measureText(t).width+8;cx.fillStyle=bg;cx.beginPath();cx.roundRect(x-w/2,y-8,w,16,6);cx.fill();cx.fillStyle=fg;cx.textAlign="center";cx.textBaseline="middle";cx.fillText(t,x,y+1)}
+function draw(tm){
+  requestAnimationFrame(draw);if(!W)return;cx.clearRect(0,0,W,H);
+  const cy=V("--cy"),pu=V("--pu"),ye=V("--ye"),ed=V("--ed"),tx=V("--tx"),bg=V("--bg"),pn=V("--pn2"),gr=V("--gr"),rd=V("--rd");
+  const onCur=(a,b)=>{for(let i=1;i<cur.length;i++)if((cur[i-1]==a&&cur[i]==b)||(cur[i-1]==b&&cur[i]==a))return true;return false};
+  for(const[a,b,w]of E){const c=onCur(a,b);cx.strokeStyle=c?cy:ed;cx.lineWidth=c?4:1.2;cx.shadowColor=cy;cx.shadowBlur=c?14:0;
+    cx.beginPath();cx.moveTo(X(a),Y(a));cx.lineTo(X(b),Y(b));cx.stroke();cx.shadowBlur=0;
+    pill(w,(X(a)+X(b))/2,(Y(a)+Y(b))/2,c?cy:pn,c?"#04121a":V("--mut"))}
+  if(cur.length>1){const t=(tm/650)%1;for(let i=1;i<cur.length;i++){const a=cur[i-1],b=cur[i],k=(t+i*.17)%1;cx.fillStyle="#fff";cx.shadowColor=cy;cx.shadowBlur=20;cx.beginPath();cx.arc(X(a)+(X(b)-X(a))*k,Y(a)+(Y(b)-Y(a))*k,3.6,0,7);cx.fill();cx.shadowBlur=0}}
+  const r=Math.max(14,Math.min(24,W/34));
+  for(let i=0;i<N;i++){const s=st[i],isOld=old.has(i)&&s==0;
+    const col=s==1?ye:s==2?pu:s==3||isOld?cy:i==hov?pu:ed;
+    cx.shadowColor=col;cx.shadowBlur=s||i==hov?18+(s==1?6*Math.sin(tm/120):0):0;
+    cx.fillStyle=bg;cx.strokeStyle=col;cx.lineWidth=s?3.5:2;cx.beginPath();cx.arc(X(i),Y(i),r,0,7);cx.fill();cx.stroke();cx.shadowBlur=0;
+    cx.fillStyle=s||isOld?tx:V("--mut");cx.font="bold "+Math.round(r*.8)+"px monospace";cx.textAlign="center";cx.textBaseline="middle";cx.fillText(L(i),X(i),Y(i)+1);
+    if(dist[i]!=null)pill(dist[i],X(i),Y(i)+r+10,"#000",cy==="#19e3f0"?"#fff":tx);
+    if(i==0){cx.fillStyle=gr;cx.font="bold 10px monospace";cx.fillText("START",X(i),Y(i)-r-8)}
+    if(i==target){cx.fillStyle=rd;cx.font="bold 10px monospace";cx.fillText("TARGET",X(i),Y(i)-r-8)}}
+}
+requestAnimationFrame(draw);
+let hov=-1;cv.addEventListener("mousemove",e=>{const b=cv.getBoundingClientRect(),mx=e.clientX-b.left,my=e.clientY-b.top;hov=-1;for(let i=0;i<N;i++)if(Math.hypot(mx-X(i),my-Y(i))<24)hov=i;cv.title=hov>=0?"Node "+L(hov)+" · "+adj[hov].length+" links · click to trace":""});cv.addEventListener("mouseleave",()=>hov=-1);
+cv.addEventListener("click",async e=>{const b=cv.getBoundingClientRect(),mx=e.clientX-b.left,my=e.clientY-b.top;
+  for(let i=1;i<N;i++)if(Math.hypot(mx-X(i),my-Y(i))<24){const id=++runId;old=new Set();stage(5);await dijkstra(i,id);return}});
+
+// ---------- pipeline ----------
+function stage(n){for(let i=0;i<STG.length;i++){const e=$("#s"+i);e.className="st"+(i<n?" ok":i==n?" on":"")}}
+async function type(el,t,id){for(const c of t){if(id!=runId)return;el.textContent+=c;await new Promise(r=>setTimeout(r,12))}}
+$("#go").onclick=async()=>{
+  upd();if(!toks.length){$("#warn").textContent="Please enter at least one word.";return}
+  const id=++runId;old=new Set();resetG();$("#out").innerHTML="";
+  // Ask the C++ backend to run the pipeline (falls back to in-browser logic if offline)
+  let be=null;try{const r=await fetch("/api/analyze?text="+encodeURIComponent($("#in").value));if(r.ok)be=await r.json()}catch(e){}setBE(!!be);
+  for(let i=0;i<5;i++){stage(i);await new Promise(r=>setTimeout(r,320));if(id!=runId)return}
+  stage(5);const found=[];
+  for(const [wi,w] of toks.entries()){const bw=be&&be.words[wi];const n=bw?bw.node:node(w);actW=w.toLowerCase();rT();const c=await dijkstra(n,id);if(c===false)return;found.push([w,n,c,bw?bw.cost:null]);await sleep()}actW="";rT();
+  stage(6);const out=$("#out");const hits=[];
+  if(be){be.words.forEach(x=>{if(x.known)hits.push([x.word,x.facts])})}else{for(const[w]of found){const k=SYN[w.toLowerCase()]||w.toLowerCase();if(KB[k])hits.push([w,KB[k]])}}
+  if(!hits.length){const p=document.createElement("p");out.appendChild(p);
+    await type(p,`No knowledge entry for "${toks.join(" ")}". Structural analysis: ${toks.length} word(s), ${toks.join("").length} characters, ${toks.join(" ").length*8} bits. Try: red, blue, water, sun, computer…`,id);return}
+  for(const[w,f]of hits){const p=document.createElement("p");p.className="cur";p.innerHTML=`<b>${w}</b> `;out.appendChild(p);
+    const s=document.createElement("span");p.appendChild(s);await type(s,f.join("; ")+".",id);p.className=""}
+  const sm=document.createElement("p");sm.className="sub";sm.textContent=`Graph cost per word: ${found.map(f=>f[0]+"="+f[2]+(f[3]!=null?(f[3]==f[2]?" ✓":" ≠ C++ "+f[3]):"")).join(", ")} · ${be?"verified by C++ backend":"computed in browser (backend offline)"}`;out.appendChild(sm);
+};
+document.querySelectorAll(".pn").forEach(p=>p.addEventListener("mousemove",e=>{const b=p.getBoundingClientRect();p.style.setProperty("--mx",e.clientX-b.left+"px");p.style.setProperty("--my",e.clientY-b.top+"px")}));
+const bc=$("#bgc"),bx=bc.getContext("2d"),mp={x:-999,y:-999},pts=[];let bw=0,bh=0;
+function bs(){bw=bc.width=innerWidth;bh=bc.height=innerHeight;pts.length=0;for(let i=0;i<Math.min(70,bw*bh/16000);i++)pts.push({x:Math.random()*bw,y:Math.random()*bh,vx:(Math.random()-.5)*.35,vy:(Math.random()-.5)*.35})}
+addEventListener("resize",bs);addEventListener("mousemove",e=>{mp.x=e.clientX;mp.y=e.clientY});bs();
+(function bl(){requestAnimationFrame(bl);bx.clearRect(0,0,bw,bh);const c1=V("--cy"),c2=V("--pu");
+for(const p of pts){p.x+=p.vx;p.y+=p.vy;if(p.x<0||p.x>bw)p.vx*=-1;if(p.y<0||p.y>bh)p.vy*=-1;const dx=p.x-mp.x,dy=p.y-mp.y,d=Math.hypot(dx,dy)||1;if(d<120){p.x+=dx/d*1.3;p.y+=dy/d*1.3}bx.globalAlpha=.7;bx.fillStyle=c1;bx.beginPath();bx.arc(p.x,p.y,1.6,0,7);bx.fill()}
+for(let i=0;i<pts.length;i++)for(let j=i+1;j<pts.length;j++){const d=Math.hypot(pts[i].x-pts[j].x,pts[i].y-pts[j].y);if(d<130){bx.globalAlpha=(1-d/130)*.4;bx.strokeStyle=i%2?c2:c1;bx.beginPath();bx.moveTo(pts[i].x,pts[i].y);bx.lineTo(pts[j].x,pts[j].y);bx.stroke()}}bx.globalAlpha=1})();
+let si=0,actW="",ga=0,gb=1;const TB=document.querySelectorAll(".tb");
+function go(n){si=(n+3)%3;$("#tr").style.transform=`translateX(-${si*100}%)`;TB.forEach((b,i)=>b.classList.toggle("on",i==si))}
+TB.forEach((b,i)=>b.onclick=()=>go(i));$("#pv").onclick=()=>go(si-1);$("#nx").onclick=()=>go(si+1);
+let tx0=0;const sl=document.querySelector(".sl");sl.addEventListener("touchstart",e=>tx0=e.touches[0].clientX,{passive:true});sl.addEventListener("touchend",e=>{const d=e.changedTouches[0].clientX-tx0;if(Math.abs(d)>60)go(si+(d<0?1:-1))});
+const CAT={color:"Color",red:"Color",blue:"Color",green:"Color",yellow:"Color",water:"Nature",sun:"Nature",moon:"Nature",fire:"Nature",tree:"Nature",light:"Physics",heart:"Body",brain:"Body",computer:"Tech",data:"Tech"};
+const ATT={Color:"wavelength · perception",Nature:"natural element",Physics:"measurable · energy",Body:"organ · biological",Tech:"digital · binary",Unknown:"no knowledge entry"};
+function rT(){
+ const cats=["Color","Nature","Physics","Body","Tech","Unknown"],by={};cats.forEach(c=>by[c]=[]);
+ toks.forEach(w=>{const k=SYN[w.toLowerCase()]||w.toLowerCase();by[CAT[k]||"Unknown"].push(w)});
+ const mx=Math.max(1,...cats.map(c=>by[c].length)),VW=900,VH=Math.max(330,270+mx*40),cw=VW/6,rx=VW/2;
+ let s=`<svg viewBox="0 0 ${VW} ${VH}" width="100%" font-family="ui-monospace,Consolas,monospace"><defs><filter id="gl" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
+ cats.forEach((c,i)=>{const x=cw*i+cw/2,y=150,on=by[c].length>0;
+  s+=`<path class="dr" d="M${rx} 58C${rx} 105 ${x} 100 ${x} ${y-20}" fill="none" stroke="${on?"var(--cy)":"var(--ed)"}" stroke-width="${on?2.5:1.2}" ${on?'filter="url(#gl)"':""}/>`;
+  by[c].forEach((w,j)=>{const wy=250+j*40,act=w.toLowerCase()==actW;
+   s+=`<path class="dr" d="M${x} ${y+20}V${wy-14}" fill="none" stroke="var(--pu)" stroke-width="2" filter="url(#gl)"/><rect x="${x-52}" y="${wy-14}" width="104" height="28" rx="14" fill="var(--bg)" stroke="${act?"var(--ye)":"var(--pu)"}" stroke-width="2" filter="url(#gl)"/><text x="${x}" y="${wy+5}" text-anchor="middle" fill="var(--tx)" font-size="13">${w}</text>`});
+  s+=`<rect x="${x-50}" y="${y-20}" width="100" height="40" rx="10" fill="var(--bg)" stroke="${on?"var(--cy)":"var(--ed)"}" stroke-width="2" ${on?'filter="url(#gl)"':""}/><text x="${x}" y="${y+5}" text-anchor="middle" fill="${on?"var(--cy)":"var(--mut)"}" font-size="14" font-weight="700">${c}</text>`});
+ s+=`<rect x="${rx-70}" y="22" width="140" height="36" rx="18" fill="var(--bg)" stroke="var(--pu)" stroke-width="2.5" filter="url(#gl)"/><text x="${rx}" y="45" text-anchor="middle" fill="var(--tx)" font-size="15" font-weight="700">Concept</text></svg>`;
+ $("#tree").innerHTML=s+`<div class="sub" style="padding:6px 4px">${toks.length?toks.map(w=>{const k=SYN[w.toLowerCase()]||w.toLowerCase(),c=CAT[k]||"Unknown";return `<b style="color:var(--cy)">${w}</b> extends ${c} extends Concept · inherits: ${ATT[c]}`}).join("<br>"):"Type words to see how each one inherits from the Concept base class."}</div>`}
+function rG(){
+ const g=$("#grid");if(!toks.length){g.innerHTML='<div class="sub">Type words to build the character, bit and alignment matrices.</div>';return}
+ const ml=Math.max(...toks.map(w=>w.length));
+ let h='<div class="sub">Character matrix · left-aligned, cell shows letter and ASCII code</div><table class="mx">'+toks.map(w=>'<tr><th>'+w+'</th>'+[...Array(ml)].map((_,i)=>{const c=w[i];return c?`<td style="background:rgba(179,75,255,${(.12+c.charCodeAt(0)/127*.5).toFixed(2)})">${c}<small>${c.charCodeAt(0)}</small></td>`:'<td class="e">·</td>'}).join("")+'</tr>').join("")+'</table>';
+ h+='<div class="sub">Bit matrix · first 12 characters, 8 bits each</div><table class="mx">'+[...toks.join("")].slice(0,12).map(c=>`<tr><th>${c}</th>`+c.charCodeAt(0).toString(2).padStart(8,"0").split("").map(b=>`<td class="${b=="1"?"o":"z"}">${b}</td>`).join("")+'</tr>').join("")+'</table>';
+ if(toks.length<2){h+='<div class="sub">Enter at least two words to see the alignment matrix.</div>';g.innerHTML=h;return}
+ ga=Math.min(ga,toks.length-1);gb=Math.min(gb,toks.length-1);if(ga==gb)gb=(ga+1)%toks.length;
+ const A=toks[ga].toLowerCase(),B=toks[gb].toLowerCase(),m=A.length,n=B.length,D=[...Array(m+1)].map((_,i)=>[...Array(n+1)].map((_,j)=>i?(j?0:i):j));
+ for(let i=1;i<=m;i++)for(let j=1;j<=n;j++)D[i][j]=Math.min(D[i-1][j]+1,D[i][j-1]+1,D[i-1][j-1]+(A[i-1]==B[j-1]?0:1));
+ const P=new Set();let i=m,j=n;P.add(i+","+j);while(i||j){if(i&&j&&D[i][j]==D[i-1][j-1]+(A[i-1]==B[j-1]?0:1)){i--;j--}else if(i&&D[i][j]==D[i-1][j]+1)i--;else j--;P.add(i+","+j)}
+ const sel=v=>toks.map((w,k)=>`<option value="${k}" ${k==v?"selected":""}>${w}</option>`).join("");
+ h+=`<div class="sub">Alignment matrix (edit distance) <select id="ga">${sel(ga)}</select> vs <select id="gb">${sel(gb)}</select> · distance <b>${D[m][n]}</b> · similarity <b>${Math.round((1-D[m][n]/Math.max(m,n))*100)}%</b></div><table class="mx"><tr><th></th><th>·</th>${[...B].map(c=>`<th>${c}</th>`).join("")}</tr>`+D.map((r,i)=>`<tr><th>${i?A[i-1]:"·"}</th>`+r.map((v,j)=>`<td class="${P.has(i+","+j)?"o":""}">${v}</td>`).join("")+"</tr>").join("")+"</table>";
+ g.innerHTML=h;$("#ga").onchange=e=>{ga=+e.target.value;rG()};$("#gb").onchange=e=>{gb=+e.target.value;rG()}}
+upd();
+
+// ---- C++ backend status badge ----
+function setBE(ok){const e=document.getElementById("be");e.className="be "+(ok?"on":"off");e.textContent="C++ BACKEND · "+(ok?"ONLINE":"OFFLINE (browser mode)")}
+fetch("/api/health").then(r=>setBE(r.ok)).catch(()=>setBE(false));
